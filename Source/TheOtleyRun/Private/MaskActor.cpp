@@ -18,17 +18,22 @@ AMaskActor::AMaskActor()
     // Face Root (holds all planes)
     FaceRoot = CreateDefaultSubobject<USceneComponent>(TEXT("FaceRoot"));
     FaceRoot->SetupAttachment(BaseMesh);
+    FaceRoot->SetMobility(EComponentMobility::Movable);
 
     // Face Planes
-    EyesPlane   = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("EyesPlane"));
-    MouthPlane  = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MouthPlane"));
     BrowsPlane  = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BrowsPlane"));
+    EyesPlane   = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("EyesPlane"));
+    NosePlane  = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("NosePlane"));
+    MouthPlane  = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MouthPlane"));
+    AccessoryPlane = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AccessoryPlane"));
     SymbolPlane = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolPlane"));
     DetailPlane = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DetailPlane"));
 
-    EyesPlane->SetupAttachment(FaceRoot);
-    MouthPlane->SetupAttachment(FaceRoot);
     BrowsPlane->SetupAttachment(FaceRoot);
+    EyesPlane->SetupAttachment(FaceRoot);
+    NosePlane->SetupAttachment(FaceRoot);
+    MouthPlane->SetupAttachment(FaceRoot);
+    AccessoryPlane->SetupAttachment(FaceRoot);
     SymbolPlane->SetupAttachment(FaceRoot);
     DetailPlane->SetupAttachment(FaceRoot);
 
@@ -43,17 +48,21 @@ AMaskActor::AMaskActor()
 
     if (PlaneMesh.Succeeded())
     {
-        EyesPlane->SetStaticMesh(PlaneMesh.Object);
-        MouthPlane->SetStaticMesh(PlaneMesh.Object);
         BrowsPlane->SetStaticMesh(PlaneMesh.Object);
+        EyesPlane->SetStaticMesh(PlaneMesh.Object);
+        NosePlane->SetStaticMesh(PlaneMesh.Object);
+        MouthPlane->SetStaticMesh(PlaneMesh.Object);
+        AccessoryPlane->SetStaticMesh(PlaneMesh.Object);
         SymbolPlane->SetStaticMesh(PlaneMesh.Object);
         DetailPlane->SetStaticMesh(PlaneMesh.Object);
     }
 
     // Disable collisions for planes
-    EyesPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    MouthPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     BrowsPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    EyesPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    NosePlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    MouthPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    AccessoryPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     SymbolPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     DetailPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
@@ -63,9 +72,66 @@ void AMaskActor::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
 
+    if (HasAnyFlags(RF_ClassDefaultObject)) return;
+
     ApplyBaseShape();
-    UpdateFaceOffsets();
+
+    if (bAutoLayout)
+    {
+        UpdateFaceOffsets();
+    }
+
+    // Delay material reapply
+    bNeedsMaterialRefresh = true;
+
+    // Reapply textures safely
+    SetFacePart(EFacePartCategory::Brows, BrowsTexture);
+    SetFacePart(EFacePartCategory::Eyes, EyesTexture);
+    SetFacePart(EFacePartCategory::Nose, NoseTexture);
+    SetFacePart(EFacePartCategory::Mouth, MouthTexture);
+    SetFacePart(EFacePartCategory::Accessory, AccessoryTexture);
+    SetFacePart(EFacePartCategory::Symbol, SymbolTexture);
+    SetFacePart(EFacePartCategory::Detail, DetailTexture);
 }
+
+#if WITH_EDITOR
+void AMaskActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+    Super::PostEditChangeProperty(PropertyChangedEvent);
+
+    Super::PostEditChangeProperty(PropertyChangedEvent);
+
+    if (HasAnyFlags(RF_ClassDefaultObject)) return;
+
+    ApplyBaseShape();
+
+    if (bAutoLayout)
+    {
+        UpdateFaceOffsets();
+    }
+}
+
+void AMaskActor::PostRegisterAllComponents()
+{
+    Super::PostRegisterAllComponents();
+
+    if (HasAnyFlags(RF_ClassDefaultObject)) return;
+
+    if (bNeedsMaterialRefresh)
+    {
+        bNeedsMaterialRefresh = false;
+
+        SetFacePart(EFacePartCategory::Brows, BrowsTexture);
+        SetFacePart(EFacePartCategory::Eyes, EyesTexture);
+        SetFacePart(EFacePartCategory::Nose, NoseTexture);
+        SetFacePart(EFacePartCategory::Mouth, MouthTexture);
+        SetFacePart(EFacePartCategory::Accessory, AccessoryTexture);
+        SetFacePart(EFacePartCategory::Symbol, SymbolTexture);
+        SetFacePart(EFacePartCategory::Detail, DetailTexture);
+    }
+}
+
+#endif
 
 // Apply selected base shape
 void AMaskActor::ApplyBaseShape()
@@ -107,66 +173,112 @@ void AMaskActor::UpdateFaceOffsets()
 {
     if (!BaseMesh || !FaceRoot) return;
 
-    FVector Forward = BaseMesh->GetForwardVector();
+    FVector Forward = GetActorForwardVector();
 
     // Front surface offset
     FVector Origin, Extent;
     BaseMesh->GetLocalBounds(Origin, Extent);
-    FVector BaseOffset = Forward * Extent.X;
+    float SphereRadius = Extent.X * BaseMesh->GetComponentScale().X;
+    FVector BaseOffset = Forward * SphereRadius;
 
-    float ForwardSpacing = 0.05f;
-
-    // --- ROTATION SETUP ---
-
-    // 1. Yaw: align plane to mesh forward
-    FQuat YawQuat = FRotationMatrix::MakeFromX(Forward).ToQuat();
-
-    // 2. Pitch: stand the plane upright (rotate around Y axis)
+    // -----------------------------
+    // Apply your working rotation to FaceRoot
+    // -----------------------------
+    FQuat YawQuat   = FRotationMatrix::MakeFromX(Forward).ToQuat();
     FQuat PitchQuat = FQuat(FVector::RightVector, FMath::DegreesToRadians(90.f));
+    FQuat RollQuat  = FQuat(FVector::ForwardVector, FMath::DegreesToRadians(-90.f));
 
-    // 3. Roll: rotate 90° around plane’s forward axis
-    FQuat RollQuat = FQuat(FVector::ForwardVector, FMath::DegreesToRadians(-90.f));
-
-    // Order matters: Roll * Pitch * Yaw
     FQuat FinalQuat = RollQuat * PitchQuat * YawQuat;
 
-    // Apply rotation
-    EyesPlane->SetRelativeRotation(FinalQuat);
-    MouthPlane->SetRelativeRotation(FinalQuat);
-    BrowsPlane->SetRelativeRotation(FinalQuat);
-    SymbolPlane->SetRelativeRotation(FinalQuat);
-    DetailPlane->SetRelativeRotation(FinalQuat);
+    // Rotate FaceRoot itself
+    FaceRoot->SetRelativeRotation(FinalQuat);
 
-    // Position (all share same base position, vertical offsets handled later)
-    FVector PlaneBasePos = BaseOffset + Forward * ForwardSpacing;
+    // -----------------------------
+    // Planes are now identity relative to FaceRoot
+    // -----------------------------
+    FQuat PlaneQuat = FQuat::Identity;
 
-    EyesPlane->SetRelativeLocation(PlaneBasePos);
-    MouthPlane->SetRelativeLocation(PlaneBasePos);
-    BrowsPlane->SetRelativeLocation(PlaneBasePos);
-    SymbolPlane->SetRelativeLocation(PlaneBasePos);
-    DetailPlane->SetRelativeLocation(PlaneBasePos);
+    BrowsPlane->SetRelativeRotation(PlaneQuat);
+    EyesPlane->SetRelativeRotation(PlaneQuat);
+    NosePlane->SetRelativeRotation(PlaneQuat);
+    MouthPlane->SetRelativeRotation(PlaneQuat);
+    AccessoryPlane->SetRelativeRotation(PlaneQuat);
+    SymbolPlane->SetRelativeRotation(PlaneQuat);
+    DetailPlane->SetRelativeRotation(PlaneQuat);
+
+    // -----------------------------
+    // Position planes along FaceRoot local axes
+    // -----------------------------
+    FVector PlaneBasePos = Forward * ForwardSpacing; // small offset along sphere forward
+    BrowsPlane->SetRelativeLocation(PlaneBasePos + FVector(0,0,BrowsHeight));
+    EyesPlane->SetRelativeLocation(PlaneBasePos + FVector(0,0,EyesHeight));
+    NosePlane->SetRelativeLocation(PlaneBasePos + FVector(0,0,NoseHeight));
+    MouthPlane->SetRelativeLocation(PlaneBasePos + FVector(0,0,MouthHeight));
+    AccessoryPlane->SetRelativeLocation(PlaneBasePos + FVector(0,0,AccessoryHeight));
+    SymbolPlane->SetRelativeLocation(PlaneBasePos + FVector(0,0,SymbolHeight));
+    DetailPlane->SetRelativeLocation(PlaneBasePos + FVector(0,0,DetailHeight));
+
+    // ================= SCALE =================
+    BrowsPlane->SetRelativeScale3D(FVector(GlobalFaceScale * BrowsScale));
+    EyesPlane->SetRelativeScale3D(FVector(GlobalFaceScale * EyesScale));
+    NosePlane->SetRelativeScale3D(FVector(GlobalFaceScale * NoseScale));
+    MouthPlane->SetRelativeScale3D(FVector(GlobalFaceScale * MouthScale));
+    AccessoryPlane->SetRelativeScale3D(FVector(GlobalFaceScale * AccessoryScale));
+    SymbolPlane->SetRelativeScale3D(FVector(GlobalFaceScale * SymbolScale));
+    DetailPlane->SetRelativeScale3D(FVector(GlobalFaceScale * DetailScale));
+
+    // Refresh render state
+    BrowsPlane->MarkRenderStateDirty();
+    EyesPlane->MarkRenderStateDirty();
+    NosePlane->MarkRenderStateDirty();
+    MouthPlane->MarkRenderStateDirty();
+    AccessoryPlane->MarkRenderStateDirty();
+    SymbolPlane->MarkRenderStateDirty();
+    DetailPlane->MarkRenderStateDirty();
 }
 
 
 // Swap a face part texture
 void AMaskActor::SetFacePart(EFacePartCategory Category, UTexture2D* FaceTexture)
 {
+    if (HasAnyFlags(RF_ClassDefaultObject)) return;
+    
+    if (!FaceTexture || !FaceMasterMaterial) return;
+
     UStaticMeshComponent* TargetPlane = nullptr;
 
     switch (Category)
     {
-        case EFacePartCategory::Eyes:    TargetPlane = EyesPlane;   break;
-        case EFacePartCategory::Mouth:   TargetPlane = MouthPlane;  break;
-        case EFacePartCategory::Brows:   TargetPlane = BrowsPlane;  break;
-        case EFacePartCategory::Symbol:  TargetPlane = SymbolPlane; break;
-        case EFacePartCategory::Detail:  TargetPlane = DetailPlane; break;
+    case EFacePartCategory::Brows:     TargetPlane = BrowsPlane;     BrowsTexture = FaceTexture; break;
+    case EFacePartCategory::Eyes:      TargetPlane = EyesPlane;      EyesTexture  = FaceTexture; break;
+    case EFacePartCategory::Nose:      TargetPlane = NosePlane;      NoseTexture  = FaceTexture; break;
+    case EFacePartCategory::Mouth:     TargetPlane = MouthPlane;     MouthTexture = FaceTexture; break;
+    case EFacePartCategory::Accessory: TargetPlane = AccessoryPlane; AccessoryTexture = FaceTexture; break;
+    case EFacePartCategory::Symbol:    TargetPlane = SymbolPlane;    SymbolTexture = FaceTexture; break;
+    case EFacePartCategory::Detail:    TargetPlane = DetailPlane;    DetailTexture = FaceTexture; break;
     }
 
-    if (!TargetPlane || !FaceTexture) return;
+    if (!TargetPlane) return;
 
-    UMaterialInstanceDynamic* MID = TargetPlane->CreateDynamicMaterialInstance(0);
+    // 🚨 Ensure material exists FIRST
+    if (TargetPlane->GetMaterial(0) != FaceMasterMaterial)
+    {
+        TargetPlane->SetMaterial(0, FaceMasterMaterial);
+    }
+
+    // Now safe to create MID
+    UMaterialInstanceDynamic* MID =
+        Cast<UMaterialInstanceDynamic>(TargetPlane->GetMaterial(0));
+
+    if (!MID)
+    {
+        MID = UMaterialInstanceDynamic::Create(FaceMasterMaterial, this);
+        TargetPlane->SetMaterial(0, MID);
+    }
+
     if (MID)
     {
-        MID->SetTextureParameterValue(FName("FaceTexture"), FaceTexture);
+        MID->SetTextureParameterValue(TEXT("FaceTexture"), FaceTexture);
     }
 }
+
