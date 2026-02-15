@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "MaskActor.generated.h"
 
 // Enum for selecting base shape
@@ -41,6 +42,7 @@ public:
 
     // Called when properties change in editor or actor is spawned
     virtual void OnConstruction(const FTransform& Transform) override;
+    virtual void Tick(float DeltaTime) override;
 
 #if WITH_EDITOR
     virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -178,3 +180,32 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Face|Editor")
     FVector FaceRootOffset = FVector::ZeroVector;
 };
+
+inline void AMaskActor::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+
+    // 1. Get the Player Camera Location
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (!PC || !PC->PlayerCameraManager) return;
+
+    FVector CameraLocation = PC->PlayerCameraManager->GetCameraLocation();
+    FVector MaskLocation = GetActorLocation();
+
+    // 2. Calculate the rotation required to face the camera
+    // We use FindLookAtRotation to point the Actor's X-axis at the camera
+    FRotator LookAtRot = UKismetMathLibrary::FindLookAtRotation(MaskLocation, CameraLocation);
+
+    // 3. Optional: Constraints
+    // Usually, for a floating mask, you want to keep it upright (Roll = 0)
+    LookAtRot.Roll = 0;
+    // If you don't want the mask to tilt up/down (Pitch), uncomment the line below:
+    // LookAtRot.Pitch = 0;
+
+    // 4. Apply the rotation
+    // Use RInterpTo for smooth movement, or SetActorRotation for instant snapping
+    FRotator CurrentRot = GetActorRotation();
+    FRotator SmoothedRot = FMath::RInterpTo(CurrentRot, LookAtRot, DeltaTime, 5.0f); // 5.0 is the speed
+
+    SetActorRotation(SmoothedRot);
+}

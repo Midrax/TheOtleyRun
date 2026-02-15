@@ -5,7 +5,7 @@
 // Sets default values
 AMaskActor::AMaskActor()
 {
-    PrimaryActorTick.bCanEverTick = false;
+    PrimaryActorTick.bCanEverTick = true;
 
     // Root
     Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
