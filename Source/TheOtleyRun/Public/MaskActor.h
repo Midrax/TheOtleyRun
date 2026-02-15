@@ -173,4 +173,8 @@ public:
     
     UPROPERTY(EditAnywhere, Category="00 Mask")
     float DetailScale = 1.f;
+    
+    // Editor tweak for manually moving the face
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Face|Editor")
+    FVector FaceRootOffset = FVector::ZeroVector;
 };

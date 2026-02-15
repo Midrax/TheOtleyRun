@@ -193,6 +193,8 @@ void AMaskActor::UpdateFaceOffsets()
     // Rotate FaceRoot itself
     FaceRoot->SetRelativeRotation(FinalQuat);
 
+    FaceRoot->SetRelativeLocation(FaceRootOffset);
+
     // -----------------------------
     // Planes are now identity relative to FaceRoot
     // -----------------------------
@@ -235,6 +237,25 @@ void AMaskActor::UpdateFaceOffsets()
     AccessoryPlane->MarkRenderStateDirty();
     SymbolPlane->MarkRenderStateDirty();
     DetailPlane->MarkRenderStateDirty();
+
+    // Make faces write to custom depth
+    BrowsPlane->SetRenderCustomDepth(true);
+    EyesPlane->SetRenderCustomDepth(true);
+    NosePlane->SetRenderCustomDepth(true);
+    MouthPlane->SetRenderCustomDepth(true);
+    AccessoryPlane->SetRenderCustomDepth(true);
+    SymbolPlane->SetRenderCustomDepth(true);
+    DetailPlane->SetRenderCustomDepth(true);
+
+    // Give them a unique stencil value
+    BrowsPlane->CustomDepthStencilValue = 1;
+    EyesPlane->CustomDepthStencilValue = 1;
+    NosePlane->CustomDepthStencilValue = 1;
+    MouthPlane->CustomDepthStencilValue = 1;
+    AccessoryPlane->CustomDepthStencilValue = 1;
+    SymbolPlane->CustomDepthStencilValue = 1;
+    DetailPlane->CustomDepthStencilValue = 1;
+
 }
 
 
