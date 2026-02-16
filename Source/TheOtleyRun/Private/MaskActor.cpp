@@ -67,6 +67,35 @@ AMaskActor::AMaskActor()
     DetailPlane->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
+inline void AMaskActor::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+
+    // 1. Get the Player Camera Location
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (!PC || !PC->PlayerCameraManager) return;
+
+    FVector CameraLocation = PC->PlayerCameraManager->GetCameraLocation();
+    FVector MaskLocation = GetActorLocation();
+
+    // 2. Calculate the rotation required to face the camera
+    // We use FindLookAtRotation to point the Actor's X-axis at the camera
+    FRotator LookAtRot = UKismetMathLibrary::FindLookAtRotation(MaskLocation, CameraLocation);
+
+    // 3. Optional: Constraints
+    // Usually, for a floating mask, you want to keep it upright (Roll = 0)
+    LookAtRot.Roll = 0;
+    // If you don't want the mask to tilt up/down (Pitch), uncomment the line below:
+    // LookAtRot.Pitch = 0;
+
+    // 4. Apply the rotation
+    // Use RInterpTo for smooth movement, or SetActorRotation for instant snapping
+    FRotator CurrentRot = GetActorRotation();
+    FRotator SmoothedRot = FMath::RInterpTo(CurrentRot, LookAtRot, DeltaTime, 5.0f); // 5.0 is the speed
+
+    SetActorRotation(SmoothedRot);
+}
+
 // Called when properties are changed in editor or actor is spawned
 void AMaskActor::OnConstruction(const FTransform& Transform)
 {
@@ -92,6 +121,8 @@ void AMaskActor::OnConstruction(const FTransform& Transform)
     SetFacePart(EFacePartCategory::Accessory, AccessoryTexture);
     SetFacePart(EFacePartCategory::Symbol, SymbolTexture);
     SetFacePart(EFacePartCategory::Detail, DetailTexture);
+
+    ApplyHeadMaterial();
 }
 
 #if WITH_EDITOR
@@ -109,6 +140,8 @@ void AMaskActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEv
     {
         UpdateFaceOffsets();
     }
+
+    ApplyHeadMaterial();
 }
 
 void AMaskActor::PostRegisterAllComponents()
@@ -129,6 +162,8 @@ void AMaskActor::PostRegisterAllComponents()
         SetFacePart(EFacePartCategory::Symbol, SymbolTexture);
         SetFacePart(EFacePartCategory::Detail, DetailTexture);
     }
+
+    ApplyHeadMaterial();
 }
 
 #endif
@@ -301,5 +336,23 @@ void AMaskActor::SetFacePart(EFacePartCategory Category, UTexture2D* FaceTexture
     {
         MID->SetTextureParameterValue(TEXT("FaceTexture"), FaceTexture);
     }
+}
+
+void AMaskActor::ApplyHeadMaterial()
+{
+    if (!BaseMesh || !FaceBaseMaterial) return;
+
+    if (!DynamicHeadMaterial)
+    {
+        DynamicHeadMaterial =
+            UMaterialInstanceDynamic::Create(FaceBaseMaterial, this);
+
+        BaseMesh->SetMaterial(0, DynamicHeadMaterial);
+    }
+
+    DynamicHeadMaterial->SetVectorParameterValue(
+        TEXT("FaceColor"),
+        HeadColor
+    );
 }
 

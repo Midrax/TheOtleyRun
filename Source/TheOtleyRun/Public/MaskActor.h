@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "MaskActor.generated.h"
 
 // Enum for selecting base shape
@@ -77,6 +79,7 @@ public:
     // Swap a face part texture
     UFUNCTION(BlueprintCallable, Category="00 Mask")
     void SetFacePart(EFacePartCategory Category, UTexture2D* FaceTexture);
+    void ApplyHeadMaterial();
 
     // Apply base shape mesh
     UFUNCTION(BlueprintCallable, Category="00 Mask")
@@ -177,35 +180,20 @@ public:
     float DetailScale = 1.f;
     
     // Editor tweak for manually moving the face
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Face|Editor")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="00 Mask|Editor")
     FVector FaceRootOffset = FVector::ZeroVector;
+
+protected:
+
+    // Base face material (assigned in editor)
+    UPROPERTY(EditDefaultsOnly, Category = "00 Mask|Material")
+    UMaterialInterface* FaceBaseMaterial = nullptr;
+
+    // Runtime dynamic material
+    UPROPERTY(Transient)
+    UMaterialInstanceDynamic* DynamicHeadMaterial = nullptr;
+
+    // Skin / head color
+    UPROPERTY(EditAnywhere, Category="00 Mask|Color")
+    FLinearColor HeadColor = FLinearColor::White;
 };
-
-inline void AMaskActor::Tick(float DeltaTime)
-{
-    Super::Tick(DeltaTime);
-
-    // 1. Get the Player Camera Location
-    APlayerController* PC = GetWorld()->GetFirstPlayerController();
-    if (!PC || !PC->PlayerCameraManager) return;
-
-    FVector CameraLocation = PC->PlayerCameraManager->GetCameraLocation();
-    FVector MaskLocation = GetActorLocation();
-
-    // 2. Calculate the rotation required to face the camera
-    // We use FindLookAtRotation to point the Actor's X-axis at the camera
-    FRotator LookAtRot = UKismetMathLibrary::FindLookAtRotation(MaskLocation, CameraLocation);
-
-    // 3. Optional: Constraints
-    // Usually, for a floating mask, you want to keep it upright (Roll = 0)
-    LookAtRot.Roll = 0;
-    // If you don't want the mask to tilt up/down (Pitch), uncomment the line below:
-    // LookAtRot.Pitch = 0;
-
-    // 4. Apply the rotation
-    // Use RInterpTo for smooth movement, or SetActorRotation for instant snapping
-    FRotator CurrentRot = GetActorRotation();
-    FRotator SmoothedRot = FMath::RInterpTo(CurrentRot, LookAtRot, DeltaTime, 5.0f); // 5.0 is the speed
-
-    SetActorRotation(SmoothedRot);
-}
