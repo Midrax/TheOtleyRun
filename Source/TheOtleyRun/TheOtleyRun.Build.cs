@@ -21,7 +21,12 @@ public class TheOtleyRun : ModuleRules
 			"Slate"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"GameplayAbilities",
+			"GameplayTasks",
+			"GameplayTags"
+		});
 
 		PublicIncludePaths.AddRange(new string[] {
 			"TheOtleyRun",
