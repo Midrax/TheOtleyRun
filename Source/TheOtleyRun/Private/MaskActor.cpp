@@ -30,9 +30,17 @@ void AMaskActor::BeginPlay()
     ApplyHeadMaterial();
 }
 
+void AMaskActor::ForceRebuildMaterial()
+{
+}
+
 void AMaskActor::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
+
+    DynamicFaceMaterial = nullptr;
+    DynamicHeadMaterial = nullptr;
+
     UpdateFaceTransform();
     CreateFaceMaterial();
     RefreshAllFaceParts();
@@ -49,6 +57,7 @@ void AMaskActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEv
     RefreshAllFaceParts();
     ApplyHeadMaterial();
 }
+#endif
 
 void AMaskActor::PostLoad()
 {
@@ -59,9 +68,6 @@ void AMaskActor::PostLoad()
     ApplyHeadMaterial();
     UpdateFaceTransform();
 }
-
-#endif
-
 void AMaskActor::UpdateFaceTransform()
 {
     if (!FacePlane)
@@ -76,52 +82,46 @@ void AMaskActor::UpdateFaceTransform()
 void AMaskActor::CreateFaceMaterial()
 {
     if (!FaceMasterMaterial || !FacePlane)
-    {
         return;
-    }
 
-    UMaterialInterface* CurrentMat = FacePlane->GetMaterial(0);
+    bool bNeedsRecreate = true;
 
-    if (!CurrentMat || CurrentMat->GetMaterial() != FaceMasterMaterial)
+    if (DynamicFaceMaterial)
     {
-        DynamicFaceMaterial =
-            UMaterialInstanceDynamic::Create(
-                FaceMasterMaterial,
-                this);
-
-        FacePlane->SetMaterial(0, DynamicFaceMaterial);
-    }
-    else
-    {
-        DynamicFaceMaterial =
-            Cast<UMaterialInstanceDynamic>(CurrentMat);
-
-        if (!DynamicFaceMaterial)
+        // Check the DMI is still valid and not pending kill
+        if (IsValid(DynamicFaceMaterial) && 
+            DynamicFaceMaterial->GetMaterial() == FaceMasterMaterial)
         {
-            DynamicFaceMaterial =
-                UMaterialInstanceDynamic::Create(
-                    FaceMasterMaterial,
-                    this);
-
-            FacePlane->SetMaterial(0, DynamicFaceMaterial);
+            bNeedsRecreate = false;
         }
     }
+
+    if (bNeedsRecreate)
+    {
+        DynamicFaceMaterial = UMaterialInstanceDynamic::Create(
+            FaceMasterMaterial, this);
+    }
+
+    FacePlane->SetMaterial(0, DynamicFaceMaterial);
 }
 
 void AMaskActor::RefreshAllFaceParts()
 {
-    if (!DynamicFaceMaterial)
-    {
-        return;
-    }
+    if (!DynamicFaceMaterial) return;
 
-    DynamicFaceMaterial->SetTextureParameterValue(TEXT("BrowsTex"),BrowsTexture);
-    DynamicFaceMaterial->SetTextureParameterValue(TEXT("EyesTex"),EyesTexture);
-    DynamicFaceMaterial->SetTextureParameterValue(TEXT("NoseTex"),NoseTexture);
-    DynamicFaceMaterial->SetTextureParameterValue(TEXT("MouthTex"),MouthTexture);
-    DynamicFaceMaterial->SetTextureParameterValue(TEXT("AccessoryTex"),AccessoryTexture);
-    DynamicFaceMaterial->SetTextureParameterValue(TEXT("SymbolTex"),SymbolTexture);
-    DynamicFaceMaterial->SetTextureParameterValue(TEXT("DetailTex"),DetailTexture);
+    auto SafeSet = [&](const FName& ParamName, UTexture2D* Tex)
+    {
+        if (Tex)
+            DynamicFaceMaterial->SetTextureParameterValue(ParamName, Tex);
+    };
+
+    SafeSet(TEXT("BrowsTex"),      BrowsTexture);
+    SafeSet(TEXT("EyesTex"),       EyesTexture);
+    SafeSet(TEXT("NoseTex"),       NoseTexture);
+    SafeSet(TEXT("MouthTex"),      MouthTexture);
+    SafeSet(TEXT("AccessoryTex"),  AccessoryTexture);
+    SafeSet(TEXT("SymbolTex"),     SymbolTexture);
+    SafeSet(TEXT("DetailTex"),     DetailTexture);
 }
 
 void AMaskActor::SetFacePart(EFacePartCategory Category, UTexture2D* FaceTexture)
@@ -214,21 +214,19 @@ void AMaskActor::SetFacePart(EFacePartCategory Category, UTexture2D* FaceTexture
 
 void AMaskActor::ApplyHeadMaterial()
 {
-    if (!BaseMesh)
-    {
-        return;
-    }
+    if (!BaseMesh) return;
 
-    if (!DynamicHeadMaterial)
-    {
-        DynamicHeadMaterial = BaseMesh->CreateAndSetMaterialInstanceDynamic(0);
+    UStaticMesh* Mesh = BaseMesh->GetStaticMesh();
+    if (!Mesh) return;
 
-        BaseMesh->SetMaterial(
-            0,
-            DynamicHeadMaterial);
-    }
+    UMaterialInterface* SourceMaterial = Mesh->GetMaterial(0);
+    if (!SourceMaterial) return;
+
+    DynamicHeadMaterial = UMaterialInstanceDynamic::Create(
+        SourceMaterial, this);
+
+    BaseMesh->SetMaterial(0, DynamicHeadMaterial);
 
     DynamicHeadMaterial->SetVectorParameterValue(
-        TEXT("FaceColor"),
-        HeadColor);
+        TEXT("FaceColor"), HeadColor);
 }

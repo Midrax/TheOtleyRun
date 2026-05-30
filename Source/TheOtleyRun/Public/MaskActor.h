@@ -33,12 +33,16 @@ protected:
 #if WITH_EDITOR
     virtual void PostEditChangeProperty(
         FPropertyChangedEvent& PropertyChangedEvent) override;
-    virtual void PostLoad() override;
 #endif
+    virtual void PostLoad() override;
 
 public:
 
     virtual void BeginPlay() override;
+    
+    UFUNCTION(BlueprintCallable)
+    void ForceRebuildMaterial();
+    
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     USceneComponent* Root;
@@ -55,10 +59,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Materials")
     UMaterialInterface* FaceMasterMaterial;
 
-    UPROPERTY()
+    UPROPERTY(Transient)
     UMaterialInstanceDynamic* DynamicFaceMaterial;
 
-    UPROPERTY()
+    UPROPERTY(Transient)
     UMaterialInstanceDynamic* DynamicHeadMaterial;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Face")
