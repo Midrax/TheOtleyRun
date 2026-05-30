@@ -18,6 +18,8 @@ AMaskActor::AMaskActor()
     {
         FacePlane->SetStaticMesh(PlaneMesh.Object);
     }
+
+    SetActorEnableCollision(false);
 }
 
 void AMaskActor::BeginPlay()
@@ -62,27 +64,13 @@ void AMaskActor::PostLoad()
 
 void AMaskActor::UpdateFaceTransform()
 {
-    if (!FacePlane || !BaseMesh)
+    if (!FacePlane)
     {
         return;
     }
 
-    FVector Forward = GetActorForwardVector();
-    FVector Origin;
-    FVector Extent;
-
-    BaseMesh->GetLocalBounds(Origin,Extent);
-
-    float Radius = Extent.X * BaseMesh->GetComponentScale().X;
-    FVector Position = Forward * Radius;
-    
-    FQuat YawQuat = FRotationMatrix::MakeFromX(Forward).ToQuat();
-    FQuat PitchQuat = FQuat(FVector::RightVector,FMath::DegreesToRadians(90.f));
-    FQuat RollQuat = FQuat(FVector::ForwardVector,FMath::DegreesToRadians(-90.f));
-    FQuat FinalQuat = RollQuat * PitchQuat * YawQuat;
-    FacePlane->SetRelativeRotation(FinalQuat);
-    FacePlane->SetRelativeLocation(Position);
-    FacePlane->SetRelativeScale3D(FVector(FaceScale));
+    FacePlane->SetRelativeScale3D(
+        FVector(FaceScale));
 }
 
 void AMaskActor::CreateFaceMaterial()
