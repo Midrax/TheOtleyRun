@@ -5,6 +5,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "MaskActor.generated.h"
 
+class UHairStyleDataAsset;
+
 UENUM(BlueprintType)
 enum class EFacePartCategory : uint8
 {
@@ -40,10 +42,6 @@ public:
 
     virtual void BeginPlay() override;
     
-    UFUNCTION(BlueprintCallable)
-    void ForceRebuildMaterial();
-    
-
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     USceneComponent* Root;
 
@@ -64,6 +62,15 @@ public:
 
     UPROPERTY(Transient)
     UMaterialInstanceDynamic* DynamicHeadMaterial;
+    
+    UPROPERTY(EditAnywhere)
+    TArray<UHairStyleDataAsset*> AvailableHairStyles;
+    
+    UPROPERTY(VisibleAnywhere)
+    UStaticMeshComponent* HairMesh;
+
+    UPROPERTY()
+    UMaterialInstanceDynamic* HairMID;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Face")
     UTexture2D* BrowsTexture;
@@ -108,4 +115,8 @@ public:
     void SetFacePart(
         EFacePartCategory Category,
         UTexture2D* FaceTexture);
+    
+    UFUNCTION(BlueprintCallable)
+    void SwapHair(const UHairStyleDataAsset* HairStyle);
+    void SetHairTint(const FLinearColor& Tint) const;
 };

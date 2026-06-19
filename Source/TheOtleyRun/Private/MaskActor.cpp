@@ -1,6 +1,9 @@
 #include "MaskActor.h"
 
+#include "HairStyleDataAsset.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/Texture2D.h"
 #include "UObject/ConstructorHelpers.h"
 
 AMaskActor::AMaskActor()
@@ -19,6 +22,13 @@ AMaskActor::AMaskActor()
         FacePlane->SetStaticMesh(PlaneMesh.Object);
     }
 
+    HairMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HairMesh"));
+    HairMesh->SetupAttachment(Root);
+    HairMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    HairMesh->SetRelativeLocation(FVector::ZeroVector);
+    HairMesh->SetRelativeRotation(FRotator::ZeroRotator);
+    HairMesh->SetRelativeScale3D(FVector(1.f));
+
     SetActorEnableCollision(false);
 }
 
@@ -28,10 +38,6 @@ void AMaskActor::BeginPlay()
     CreateFaceMaterial();
     RefreshAllFaceParts();
     ApplyHeadMaterial();
-}
-
-void AMaskActor::ForceRebuildMaterial()
-{
 }
 
 void AMaskActor::OnConstruction(const FTransform& Transform)
@@ -229,4 +235,39 @@ void AMaskActor::ApplyHeadMaterial()
 
     DynamicHeadMaterial->SetVectorParameterValue(
         TEXT("FaceColor"), HeadColor);
+
+    SwapHair(AvailableHairStyles[0]);
+    SetHairTint(FLinearColor(0.2f, 0.8f, 1.0f)); // icy blue hair
+}
+
+void AMaskActor::SwapHair(const UHairStyleDataAsset* HairStyle)
+{
+    if (!HairMesh || !HairStyle || !HairStyle->Mesh)
+        return;
+
+    HairMesh->SetStaticMesh(HairStyle->Mesh);
+    HairMesh->SetRelativeLocation(HairStyle->RelativeLocation);
+    HairMesh->SetRelativeRotation(HairStyle->RelativeRotation);
+    HairMesh->SetRelativeScale3D(HairStyle->RelativeScale);
+
+    if (HairStyle->HairMaterial)
+    {
+        UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(
+            HairStyle->HairMaterial,
+            this
+        );
+
+        HairMesh->SetMaterial(0, MID);
+
+        // store it if you want later tint updates
+        HairMID = MID;
+    }
+}
+
+void AMaskActor::SetHairTint(const FLinearColor& Tint) const
+{
+    if (HairMID)
+    {
+        HairMID->SetVectorParameterValue(TEXT("HairTint"), Tint);
+    }
 }
